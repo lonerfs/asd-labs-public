@@ -12,8 +12,6 @@ import sys
 import time
 
 
-# ============================== стек ==============================
-
 class _Node:
     __slots__ = ("value", "next")
 
