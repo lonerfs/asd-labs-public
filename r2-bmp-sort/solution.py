@@ -8,7 +8,6 @@ import argparse
 
 
 class BMPError(Exception):
-    """Специальное исключение для ошибок формата BMP."""
     pass
 
 def read_bmp(path):
@@ -38,7 +37,7 @@ def read_bmp(path):
     bottom_up = biHeight > 0
     height = abs(biHeight)
 
-    # Длина строки дополняется до кратности 4
+    #Длина строки дополняется до кратности 4
     row_size = ((biWidth * 3 + 3) // 4) * 4
     expected_size = bfOffBits + row_size * height
 
@@ -50,7 +49,6 @@ def read_bmp(path):
         row_start = bfOffBits + y * row_size
         for x in range(biWidth):
             offset = row_start + x * 3
-            # В BMP порядок BGR
             b = data[offset]
             g = data[offset + 1]
             r = data[offset + 2]
@@ -70,7 +68,7 @@ def write_bmp(path, width, height, pixels, bottom_up):
             pixel_data.extend((b, g, r))
         pixel_data.extend(b'\x00' * padding)
 
-    # biHeight: положительный если bottom_up, отрицательный если top-down
+    #biHeight: положительный если bottom_up, отрицательный если top-down
     h_val = height if bottom_up else -height
     file_header = struct.pack("<2sIHHI", b'BM', 54 + len(pixel_data), 0, 0, 54)
     info_header = struct.pack("<IiiHHIIiiII", 40, width, h_val, 1, 24, 0, len(pixel_data), 2835, 2835, 0, 0)
@@ -93,7 +91,6 @@ def counting_sort_by_digit(keys, pixels, exp, frame_callback=None, frame_step=10
     for i in range(1, 10):
         count[i] += count[i - 1]
 
-    # Идем с конца для сохранения устойчивости
     for i in range(n - 1, -1, -1):
         digit = (keys[i] // exp) % 10
         count[digit] -= 1
@@ -101,7 +98,7 @@ def counting_sort_by_digit(keys, pixels, exp, frame_callback=None, frame_step=10
         output_keys[pos] = keys[i]
         output_pixels[pos] = pixels[i]
 
-    # Копируем обратно, вызывая callback для анимации
+    #Копируем обратно
     for i in range(n):
         keys[i] = output_keys[i]
         pixels[i] = output_pixels[i]
@@ -120,18 +117,15 @@ def radix_sort_lsd(keys, pixels, frame_callback=None, frame_step=10000):
     while max_key // exp > 0:
         counting_sort_by_digit(keys, pixels, exp, frame_callback, frame_step)
         exp *= 10
-        # Сохраняем кадр после каждого разряда
+        #Сохраняем кадр после каждого разряда
         if frame_callback:
             frame_callback(pixels)
 
 def main():
-    # Умный парсинг аргументов (работает и для check.py, и для ручного запуска)
     if len(sys.argv) == 3 and not sys.argv[1].startswith('-'):
-        # Запуск от check.py: переданы только BMP и OUT
         bmp_path = sys.argv[1]
         out_path = sys.argv[2]
 
-        # Автоматически угадываем путь к ключам (01.in -> 01.keys.txt)
         if bmp_path.endswith('.in'):
             keys_path = bmp_path[:-3] + '.keys.txt'
         else:
@@ -141,7 +135,7 @@ def main():
         anim_dir = None
         anim_step = 10000
     else:
-        # Ручной запуск через аргументы
+        #Ручной запуск через аргументы
         parser = argparse.ArgumentParser(description="Восстановление BMP сортировкой (LSD)")
         parser.add_argument("--bmp", required=True, help="Путь к перемешанному BMP")
         parser.add_argument("--keys", required=True, help="Путь к файлу ключей")
@@ -160,10 +154,10 @@ def main():
         anim_step = args.anim_step
 
     try:
-        # 1. Чтение изображения
+        #Чтение изображения
         width, height, pixels, bottom_up = read_bmp(bmp_path)
 
-        # 2. Чтение ключей
+        #Чтение ключей
         with open(keys_path, "r") as f:
             lines = [line.strip() for line in f if line.strip()]
 
@@ -178,7 +172,7 @@ def main():
         if len(keys) != len(pixels):
             raise ValueError(f"Несовпадение: ключей {len(keys)}, пикселей {len(pixels)}")
 
-        # 3. Настройка анимации
+        #Настройка анимации
         frame_callback = None
         if anim_dir:
             os.makedirs(anim_dir, exist_ok=True)
@@ -192,37 +186,77 @@ def main():
 
             frame_callback = save_frame
 
-        # 4. Замеры или одиночный запуск
+        #Замеры или одиночный запуск
         if bench > 1:
+            #ПРОГРЕВ
+            for _ in range(3):
+                k_warm = keys.copy()
+                p_warm = pixels.copy()
+                radix_sort_lsd(k_warm, p_warm)
+
             times = []
+            checksum = 0
+
+            #СЕРИЯ ЗАМЕРОВ
             for _ in range(bench):
                 k_copy = keys.copy()
                 p_copy = pixels.copy()
+
                 t0 = time.perf_counter()
                 radix_sort_lsd(k_copy, p_copy)
                 t1 = time.perf_counter()
+
                 times.append(t1 - t0)
 
+                checksum = sum(k_copy)
+
             med = statistics.median(times)
+            lo, hi = min(times), max(times)
+
             print(f"Медиана сортировки: {med * 1000:.3f} мс")
+            print(f"Мин: {lo * 1000:.3f} мс, Макс: {hi * 1000:.3f} мс")
+            print(f"Контрольная сумма (сумма ключей): {checksum}")
+
+            #Сохраняем последний отсортированный массив для записи в файл
             final_keys, final_pixels = k_copy, p_copy
         else:
             final_keys, final_pixels = keys, pixels
             radix_sort_lsd(final_keys, final_pixels, frame_callback, anim_step)
 
-        # 5. Запись результата
+        #Запись результата
         write_bmp(out_path, width, height, final_pixels, bottom_up)
 
-        # Если запускали вручную (не check.py), выведем сообщение об успехе
         if len(sys.argv) != 3:
             print(f"Готово! Изображение сохранено в {out_path}")
 
     except (BMPError, ValueError, OSError) as e:
-        print(f"Ошибка: {e}", file=sys.stderr)
-        sys.exit(1) # check.py считает ненулевой код успехом для robustness!
-    except Exception as e:
-        print(f"Непредвиденная ошибка: {e}", file=sys.stderr)
-        sys.exit(2)
+        err_msg = f"Ошибка: {e}"
+        print(err_msg, file=sys.stderr) # Вывод в консоль для check.py
 
+        try:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            bmp_name = sys.argv[1] if len(sys.argv) > 1 else "неизвестный_файл"
+            with open("errors.log", "a", encoding="utf-8") as log_file:
+                log_file.write(f"[{timestamp}] Входной файл: {bmp_name}\n")
+                log_file.write(f"  Причина: {err_msg}\n")
+                log_file.write("-" * 50 + "\n")
+        except Exception:
+            pass #Если не удалось записать лог, не роняем программу
+
+        sys.exit(1)
+
+    except Exception as e:
+        err_msg = f"Непредвиденная ошибка: {e}"
+        print(err_msg, file=sys.stderr)
+
+        try:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open("errors.log", "a", encoding="utf-8") as log_file:
+                log_file.write(f"[{timestamp}] {err_msg}\n")
+                log_file.write("-" * 50 + "\n")
+        except Exception:
+            pass
+
+        sys.exit(2)
 if __name__ == "__main__":
     main()

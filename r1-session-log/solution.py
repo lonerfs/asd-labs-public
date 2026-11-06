@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Разбор журнала сессий стеком.
-
-Запуск:
-    python solution.py вход.txt выход.txt      # обычный разбор
-    python solution.py --bench                 # замеры по протоколу курса
-"""
 import io
 import platform
 import statistics
@@ -117,7 +111,6 @@ BENCH_SIZES = [40_000, 80_000, 160_000, 320_000, 640_000, 1_280_000]  # удво
 
 
 def _gen_log(n, seed=BENCH_SEED):
-    """Сбалансированный журнал из ~n строк."""
     half = n // 2
     lines = [f"LOGIN u{i}" for i in range(half)]
     lines += [f"LOGOUT u{i}" for i in reversed(range(half))]
